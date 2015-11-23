@@ -4,10 +4,15 @@ exports.init = function () {
     Object.defineProperty(Object.prototype, 'check', {
         get: function () {
             var object = this;
-            var result = getMethods(object, false);
+            var result = getMethods(object);
             Object.defineProperty(result, 'not', {
                 get: function () {
-                    return getMethods(object, true);
+                    return Object.keys(result).reduce(function (state, key) {
+                        state[key] = function () {
+                            return !result[key].apply(object, arguments);
+                        };
+                        return result;
+                    }, {});
                 }
             });
             return result;
@@ -26,46 +31,47 @@ exports.wrap = function (object) {
             }
         };
     }
-    object.__proto__.isNull = function () {
-        return false;
-    };
+    Object.setPrototypeOf(object, {
+        isNull: function () {
+            return false;
+        }
+    });
     return object;
 };
 
-function getMethods(object, isInverse) {
+function getMethods(object) {
     var type = Array.isArray(object) ? 'array' : typeof object;
     var result = {};
     switch (type) {
         case 'array' :
-            result.hasLength = callFunction(hasLength, isInverse).bind(object);
+            result.hasLength = callFunction(hasLength).bind(object);
         case 'object' :
-            result.containsKeys = callFunction(containsKeys, isInverse).bind(object);
-            result.hasKeys = callFunction(hasKeys, isInverse).bind(object);
-            result.containsValues = callFunction(containsValues, isInverse).bind(object);
-            result.hasValues = callFunction(hasValues, isInverse).bind(object);
-            result.hasValueType = callFunction(hasValueType, isInverse).bind(object);
+            result.containsKeys = callFunction(containsKeys).bind(object);
+            result.hasKeys = callFunction(hasKeys).bind(object);
+            result.containsValues = callFunction(containsValues).bind(object);
+            result.hasValues = callFunction(hasValues).bind(object);
+            result.hasValueType = callFunction(hasValueType).bind(object);
             return result;
         case 'string' :
-            result.hasLength = callFunction(hasLength, isInverse).bind(object);
-            result.hasWordsCount = callFunction(hasWordsCount, isInverse).bind(object);
+            result.hasLength = callFunction(hasLength).bind(object);
+            result.hasWordsCount = callFunction(hasWordsCount).bind(object);
             return result;
         case 'function' :
-            result.hasParamsCount = callFunction(hasParamsCount, isInverse).bind(object);
+            result.hasParamsCount = callFunction(hasParamsCount).bind(object);
             return result;
     }
 }
 
-function callFunction(func, isInverse) {
+function callFunction(func) {
     return function () {
-        return isInverse ? !func.apply(this, arguments) : func.apply(this, arguments);
+        return func.apply(this, arguments);
     };
 }
 
 function containsKeys(keys) {
-    var object = this;
     return keys.every(function (key) {
-        return object.hasOwnProperty(key);
-    });
+        return this.hasOwnProperty(key);
+    }, this);
 }
 
 function hasKeys(keys) {
@@ -75,25 +81,27 @@ function hasKeys(keys) {
 }
 
 function containsValues(values) {
-    var object = this;
     return values.every(function (value) {
-        return Object.keys(object).some(function (key) {
-            return value === object[key];
-        });
-    });
+        return Object.keys(this).some(function (key) {
+            return value === this[key];
+        }, this);
+    }, this);
 }
 
 function hasValues(values) {
-    var object = this;
     if (this.check.containsValues(values)) {
-        return values.check.containsValues(Object.keys(object).map(function (key) {
-            return object[key];
-        }));
+        var containsValues = Object.keys(this).map(function (key) {
+            return this[key];
+        }, this);
+        return values.check.containsValues(containsValues);
     }
 }
 
 function hasValueType(key, type) {
-    return this.hasOwnProperty(key) ? typeof this[key] === typeof type() : false;
+    if (!this.hasOwnProperty(key)) {
+        return false;
+    }
+    return Object.getPrototypeOf(this[key]) === Object.getPrototypeOf(type());
 }
 
 function hasLength(length) {
@@ -105,7 +113,8 @@ function hasParamsCount(count) {
 }
 
 function hasWordsCount(count) {
-    return count === this.split(' ').filter(function (word) {
-            return word.length > 0;
-        }).length;
+    var words = this.split(' ').filter(function (word) {
+        return word.length > 0;
+    });
+    return count === words.length;
 }
