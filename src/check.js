@@ -40,8 +40,11 @@ exports.wrap = function (object) {
 };
 
 function getMethods(object) {
-    var type = Array.isArray(object) ? 'array' : typeof object;
+    if (object === null) {
+        return {};
+    }
     var result = {};
+    var type = Array.isArray(object) ? 'array' : typeof object;
     switch (type) {
         case 'array' :
             result.hasLength = callFunction(hasLength).bind(object);
@@ -60,6 +63,7 @@ function getMethods(object) {
             result.hasParamsCount = callFunction(hasParamsCount).bind(object);
             return result;
     }
+    return {};
 }
 
 function callFunction(func) {
@@ -98,10 +102,10 @@ function hasValues(values) {
 }
 
 function hasValueType(key, type) {
-    if (!this.hasOwnProperty(key)) {
+    if (!this.hasOwnProperty(key) || this[key] === null) {
         return false;
     }
-    return Object.getPrototypeOf(this[key]) === Object.getPrototypeOf(type());
+    return typeof this[key] === type.name.toLowerCase();
 }
 
 function hasLength(length) {
